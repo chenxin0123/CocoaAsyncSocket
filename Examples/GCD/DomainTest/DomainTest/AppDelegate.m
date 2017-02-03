@@ -27,7 +27,7 @@
 	
 	NSError *error = nil;
 	_server = [DomainServer new];
-	self.server.url = [NSURL fileURLWithPath:@"/tmp/socket"];
+	self.server.url = [NSURL fileURLWithPath:@"/tmp/socket_cx"];
 	if (![self.server start:&error]) {
 		[self.window presentError:error];
 	}

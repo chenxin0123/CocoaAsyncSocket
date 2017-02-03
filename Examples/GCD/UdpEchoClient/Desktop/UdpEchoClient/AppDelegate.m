@@ -45,6 +45,7 @@ static const int ddLogLevel = LOG_LEVEL_VERBOSE;
 		DDLogError(@"Error binding: %@", error);
 		return;
 	}
+    // 这里直接就开始接收数据 所以上面调用bind触发socket的创建
 	if (![udpSocket beginReceiving:&error])
 	{
 		DDLogError(@"Error receiving: %@", error);

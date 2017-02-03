@@ -97,8 +97,7 @@ static const int logLevel = LOG_LEVEL_VERBOSE;
 /**
  * Just to type less code.
 **/
-#define AutoreleasedBlock(block) ^{ @autoreleasepool { block(); }} 
-
+#define AutoreleasedBlock(block) ^{ @autoreleasepool { block(); }}
 
 @class GCDAsyncUdpSendPacket;
 
@@ -110,19 +109,19 @@ NSString *const GCDAsyncUdpSocketThreadName = @"GCDAsyncUdpSocket-CFStream";
 
 enum GCDAsyncUdpSocketFlags
 {
-	kDidCreateSockets        = 1 <<  0,  // If set, the sockets have been created.
-	kDidBind                 = 1 <<  1,  // If set, bind has been called.
+	kDidCreateSockets        = 1 <<  0,  // If set, the sockets have been created. 创建完socket后设置
+	kDidBind                 = 1 <<  1,  // If set, bind has been called. bind方法已经调用过 或者调用了connect方法 或者发送了消息
 	kConnecting              = 1 <<  2,  // If set, a connection attempt is in progress.
 	kDidConnect              = 1 <<  3,  // If set, socket is connected.
-	kReceiveOnce             = 1 <<  4,  // If set, one-at-a-time receive is enabled
-	kReceiveContinuous       = 1 <<  5,  // If set, continuous receive is enabled
-	kIPv4Deactivated         = 1 <<  6,  // If set, socket4 was closed due to bind or connect on IPv6.
+	kReceiveOnce             = 1 <<  4,  // If set, one-at-a-time receive is enabled 默认NO
+	kReceiveContinuous       = 1 <<  5,  // If set, continuous receive is enabled 默认YES
+	kIPv4Deactivated         = 1 <<  6,  // If set, socket4 was closed due to bind or connect on IPv6. 表示socket已经被释放 bind(本地不支持ipv4)/connect指定connectipv6 然关闭socket4然后设置这个选项
 	kIPv6Deactivated         = 1 <<  7,  // If set, socket6 was closed due to bind or connect on IPv4.
 	kSend4SourceSuspended    = 1 <<  8,  // If set, send4Source is suspended.
 	kSend6SourceSuspended    = 1 <<  9,  // If set, send6Source is suspended.
 	kReceive4SourceSuspended = 1 << 10,  // If set, receive4Source is suspended.
 	kReceive6SourceSuspended = 1 << 11,  // If set, receive6Source is suspended.
-	kSock4CanAcceptBytes     = 1 << 12,  // If set, we know socket4 can accept bytes. If unset, it's unknown.
+	kSock4CanAcceptBytes     = 1 << 12,  // If set, we know socket4 can accept bytes. If unset, it's unknown. 可以发送数据 send4Source回调中设置
 	kSock6CanAcceptBytes     = 1 << 13,  // If set, we know socket6 can accept bytes. If unset, it's unknown.
 	kForbidSendReceive       = 1 << 14,  // If set, no new send or receive operations are allowed to be queued.
 	kCloseAfterSends         = 1 << 15,  // If set, close as soon as no more sends are queued.
@@ -157,6 +156,7 @@ enum GCDAsyncUdpSocketConfig
 	dispatch_queue_t receiveFilterQueue;
 	BOOL receiveFilterAsync;
 	
+    /// 发送的过滤器
 	GCDAsyncUdpSocketSendFilterBlock sendFilterBlock;
 	dispatch_queue_t sendFilterQueue;
 	BOOL sendFilterAsync;
@@ -172,6 +172,7 @@ enum GCDAsyncUdpSocketConfig
 	
 	dispatch_queue_t socketQueue;
 	
+    /// source
 	dispatch_source_t send4Source;
 	dispatch_source_t send6Source;
 	dispatch_source_t receive4Source;
@@ -184,8 +185,9 @@ enum GCDAsyncUdpSocketConfig
 	unsigned long socket4FDBytesAvailable;
 	unsigned long socket6FDBytesAvailable;
 	
-	uint32_t pendingFilterOperations;
+	uint32_t pendingFilterOperations;/// 当前正在过滤的接收到的包数量
 	
+    
 	NSData   *cachedLocalAddress4;
 	NSString *cachedLocalHost4;
 	uint16_t  cachedLocalPort4;
@@ -194,13 +196,15 @@ enum GCDAsyncUdpSocketConfig
 	NSString *cachedLocalHost6;
 	uint16_t  cachedLocalPort6;
 	
+    // 连接的远端信息
 	NSData   *cachedConnectedAddress;
 	NSString *cachedConnectedHost;
 	uint16_t  cachedConnectedPort;
 	int       cachedConnectedFamily;
 
-	void *IsOnSocketQueueOrTargetQueueKey;    
+	void *IsOnSocketQueueOrTargetQueueKey; /// 防止GCD死锁
 	
+    /// 这些没用
 #if TARGET_OS_IPHONE
 	CFStreamClientContext streamContext;
 	CFReadStreamRef readStream4;
@@ -269,11 +273,12 @@ enum GCDAsyncUdpSocketConfig
 	NSTimeInterval timeout;
 	long tag;
 	
-	BOOL resolveInProgress;
-	BOOL filterInProgress;
+    /// currentRead的以下两个属性将使sendSource挂起
+	BOOL resolveInProgress; /// 是否正在解析远端接口信息 面向连接的就为NO
+	BOOL filterInProgress; /// 过滤内容中 因为是异步的 所以用这个属性
 	
 	NSArray *resolvedAddresses;
-	NSError *resolveError;
+	NSError *resolveError; /// DNS解析错误
 	
 	NSData *address;
 	int addressFamily;
@@ -309,7 +314,7 @@ enum GCDAsyncUdpSocketConfig
 @public
 //	uint8_t type;
 	
-	BOOL resolveInProgress;
+	BOOL resolveInProgress; // 是否DNS解析中
 	
 	NSArray *addresses;
 	NSError *error;
@@ -336,6 +341,9 @@ enum GCDAsyncUdpSocketConfig
 
 @implementation GCDAsyncUdpSocket
 
+/// You MUST set a delegate AND delegate dispatch queue
+/// observe applicationWillEnterForeground
+/// 初始化并没有创建socket 必须调用bindToPort...或者bindToAddress...方法 或者connectToHost/Address或者send方法
 - (id)init
 {
 	LogTrace();
@@ -433,6 +441,8 @@ enum GCDAsyncUdpSocketConfig
 	return self;
 }
 
+/// 移除通知applicationWillEnterForeground
+/// 关闭socket
 - (void)dealloc
 {
 	LogInfo(@"%@ - %@ (start)", THIS_METHOD, self);
@@ -469,6 +479,8 @@ enum GCDAsyncUdpSocketConfig
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #pragma mark Configuration
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// 代理以及delegateQueue相关方法 跟TCP类似
 
 - (id)delegate
 {
@@ -622,6 +634,8 @@ enum GCDAsyncUdpSocketConfig
 {
 	[self setDelegate:newDelegate delegateQueue:newDelegateQueue synchronously:YES];
 }
+
+/// ipv4 v6是否可用 getter/setter
 
 - (BOOL)isIPv4Enabled
 {
@@ -783,6 +797,7 @@ enum GCDAsyncUdpSocketConfig
 		dispatch_async(socketQueue, block);
 }
 
+/// 清空ipv4 v6的prefer选项
 - (void)setIPVersionNeutral
 {
 	dispatch_block_t block = ^{
@@ -799,6 +814,8 @@ enum GCDAsyncUdpSocketConfig
 	else
 		dispatch_async(socketQueue, block);
 }
+
+/// 最大的接收缓存字节数
 
 - (uint16_t)maxReceiveIPv4BufferSize
 {
@@ -864,7 +881,7 @@ enum GCDAsyncUdpSocketConfig
 		dispatch_async(socketQueue, block);
 }
 
-
+/// 额外的用户信息
 - (id)userData
 {
 	__block id result = nil;
@@ -902,6 +919,7 @@ enum GCDAsyncUdpSocketConfig
 #pragma mark Delegate Helpers
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// connect success
 - (void)notifyDidConnectToAddress:(NSData *)anAddress
 {
 	LogTrace();
@@ -918,6 +936,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// fail to connect
 - (void)notifyDidNotConnect:(NSError *)error
 {
 	LogTrace();
@@ -932,6 +951,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// 数据发送成功 即使是被过滤掉也会调用这个方法
 - (void)notifyDidSendDataWithTag:(long)tag
 {
 	LogTrace();
@@ -946,6 +966,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// 远端地址解析出错 发送失败
 - (void)notifyDidNotSendDataWithTag:(long)tag dueToError:(NSError *)error
 {
 	LogTrace();
@@ -1079,6 +1100,7 @@ enum GCDAsyncUdpSocketConfig
 #pragma mark Utilities
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// 检查delegate delegateQueue
 - (BOOL)preOp:(NSError **)errPtr
 {
 	NSAssert(dispatch_get_specific(IsOnSocketQueueOrTargetQueueKey), @"Must be dispatched on socketQueue");
@@ -1109,6 +1131,8 @@ enum GCDAsyncUdpSocketConfig
 /**
  * This method executes on a global concurrent queue.
  * When complete, it executes the given completion block on the socketQueue.
+ * 解析host 在socketQueue中调用completionBlock
+ * addresses为sockaddr数组
 **/
 - (void)asyncResolveHost:(NSString *)aHost
                     port:(uint16_t)port
@@ -1228,6 +1252,8 @@ enum GCDAsyncUdpSocketConfig
  * 
  * Returns the address family (AF_INET or AF_INET6) of the picked address,
  * or AF_UNSPEC and the corresponding error is there's a problem.
+ * 返回协议族类型
+ * 选择addresses中其中一个作为返回值放入addressPtr 返回对应的协议族
 **/
 - (int)getAddress:(NSData **)addressPtr error:(NSError **)errorPtr fromAddresses:(NSArray *)addresses
 {
@@ -1240,6 +1266,8 @@ enum GCDAsyncUdpSocketConfig
 	
 	// Check for problems
 	
+    /// 解析支持的ip类型
+    
 	BOOL resolvedIPv4Address = NO;
 	BOOL resolvedIPv6Address = NO;
 	
@@ -1254,6 +1282,8 @@ enum GCDAsyncUdpSocketConfig
 		}
 	}
 	
+    
+    /// 错误检查
 	BOOL isIPv4Disabled = (config & kIPv4Disabled) ? YES : NO;
 	BOOL isIPv6Disabled = (config & kIPv6Disabled) ? YES : NO;
 	
@@ -1371,6 +1401,7 @@ enum GCDAsyncUdpSocketConfig
 /**
  * Finds the address(es) of an interface description.
  * An inteface description may be an interface name (en0, en1, lo0) or corresponding IP (192.168.4.34).
+ * 这个方法同tcp的一样
 **/
 - (void)convertIntefaceDescription:(NSString *)interfaceDescription
                               port:(uint16_t)port
@@ -1520,6 +1551,7 @@ enum GCDAsyncUdpSocketConfig
 /**
  * Converts a numeric hostname into its corresponding address.
  * The hostname is expected to be an IPv4 or IPv6 address represented as a human-readable string. (e.g. 192.168.4.34)
+ * 将计算机名翻译成ipv4 ipv6
 **/
 - (void)convertNumericHost:(NSString *)numericHost
                       port:(uint16_t)port
@@ -1565,6 +1597,8 @@ enum GCDAsyncUdpSocketConfig
 	if (addr4Ptr) *addr4Ptr = addr4;
 	if (addr6Ptr) *addr6Ptr = addr6;
 }
+
+/// 是否连接到指定的地址
 
 - (BOOL)isConnectedToAddress4:(NSData *)someAddr4
 {
@@ -1698,6 +1732,14 @@ enum GCDAsyncUdpSocketConfig
 	return result;
 }
 
+/// 设置send4Source receive4Source
+
+/// send4Source
+/// 无发送任务|正在解析远端|
+/// 未完
+
+/// receive4Source
+/// doReceive doReceiveEOF
 - (void)setupSendAndReceiveSourcesForSocket4
 {
 	LogTrace();
@@ -1920,6 +1962,7 @@ enum GCDAsyncUdpSocketConfig
 	flags |= kReceive6SourceSuspended;
 }
 
+/// 这里会创建两个socket
 - (BOOL)createSocket4:(BOOL)useIPv4 socket6:(BOOL)useIPv6 error:(NSError **)errPtr
 {
 	LogTrace();
@@ -1929,7 +1972,7 @@ enum GCDAsyncUdpSocketConfig
 	
 	// CreateSocket Block
 	// This block will be invoked below.
-	
+	// socket(domain, SOCK_DGRAM, 0);
 	int(^createSocket)(int) = ^int (int domain) {
 		
 		int socketFD = socket(domain, SOCK_DGRAM, 0);
@@ -2123,6 +2166,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// 关闭ip4socket
 - (void)closeSocket4
 {
 	if (socket4FD != SOCKET_NULL)
@@ -2137,7 +2181,7 @@ enum GCDAsyncUdpSocketConfig
 		// invoke the cancel handler if the dispatch source is paused.
 		// So we have to unpause the source if needed.
 		// This allows the cancel handler to be run, which in turn releases the source and closes the socket.
-		
+		// 唤醒 触发cancel回调
 		[self resumeSend4Source];
 		[self resumeReceive4Source];
 		
@@ -2161,6 +2205,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// 关闭ip6socket
 - (void)closeSocket6
 {
 	if (socket6FD != SOCKET_NULL)
@@ -2493,6 +2538,7 @@ enum GCDAsyncUdpSocketConfig
 	return result;
 }
 
+/// 获取连接的 端口 host family sockaddr
 - (void)maybeUpdateCachedConnectedAddressInfo
 {
 	NSAssert(dispatch_get_specific(IsOnSocketQueueOrTargetQueueKey), @"Must be dispatched on socketQueue");
@@ -2691,9 +2737,11 @@ enum GCDAsyncUdpSocketConfig
 /**
  * This method runs through the various checks required prior to a bind attempt.
  * It is shared between the various bind methods.
+ * 检查delegate delegateQueue 是否重复调用bind方法 连接前才能绑定
 **/
 - (BOOL)preBind:(NSError **)errPtr
 {
+    // 检查delegate delegateQueue
 	if (![self preOp:errPtr])
 	{
 		return NO;
@@ -2735,6 +2783,8 @@ enum GCDAsyncUdpSocketConfig
 	return YES;
 }
 
+/// 绑定端口 传0自动分配一个端口 这个方法作为Client为可选
+/// 如果服务端同时支持ipv4 ipv6 那么会创建两个socket
 - (BOOL)bindToPort:(uint16_t)port error:(NSError **)errPtr
 {
 	return [self bindToPort:port interface:nil error:errPtr];
@@ -2795,6 +2845,7 @@ enum GCDAsyncUdpSocketConfig
 		
 		// Create the socket(s) if needed
 		
+        // 创建socket
 		if ((flags & kDidCreateSockets) == 0)
 		{
 			if (![self createSocket4:useIPv4 socket6:useIPv6 error:&err])
@@ -2838,7 +2889,9 @@ enum GCDAsyncUdpSocketConfig
 		// Update flags
 		
 		flags |= kDidBind;
-		
+        
+        
+		// 绑定失败的关闭掉
 		if (!useIPv4) flags |= kIPv4Deactivated;
 		if (!useIPv6) flags |= kIPv6Deactivated;
 		
@@ -2992,6 +3045,7 @@ enum GCDAsyncUdpSocketConfig
 /**
  * This method runs through the various checks required prior to a connect attempt.
  * It is shared between the various connect methods.
+ * 检查设置以及是否重复连接
 **/
 - (BOOL)preConnect:(NSError **)errPtr
 {
@@ -3026,6 +3080,15 @@ enum GCDAsyncUdpSocketConfig
 	return YES;
 }
 
+/*
+* Choosing to connect to a specific address has the following effect:
+* - You will only be able to send data to the connected address.
+* - You will only be able to receive data from the connected address.
+* - You will receive ICMP messages that come from the connected address, such as "connection refused".
+* TCP中调用connect会引起三次握手,client与server建立连结.UDP中调用connect内核仅仅把对端ip&port记录下来.
+* 设置Send的默认接收端，免去每次发送都指定接收端的麻烦
+* 也把该UdpClient所能接受的消息来源限制为所连接的接受端
+*/
 - (BOOL)connectToHost:(NSString *)host onPort:(uint16_t)port error:(NSError **)errPtr
 {
 	__block BOOL result = NO;
@@ -3052,6 +3115,7 @@ enum GCDAsyncUdpSocketConfig
 		
 		// Create the socket(s) if needed
 		
+        // 创建socket
 		if ((flags & kDidCreateSockets) == 0)
 		{
 			if (![self createSockets:&err])
@@ -3174,6 +3238,7 @@ enum GCDAsyncUdpSocketConfig
 	return result;
 }
 
+/// 在这里调用connect方法
 - (void)maybeConnect
 {
 	LogTrace();
@@ -3187,17 +3252,17 @@ enum GCDAsyncUdpSocketConfig
 		GCDAsyncUdpSpecialPacket *connectPacket = (GCDAsyncUdpSpecialPacket *)currentSend;
 		
 		if (connectPacket->resolveInProgress)
-		{
+		{ // DNS解析未完成
 			LogVerbose(@"Waiting for DNS resolve...");
 		}
 		else
 		{
 			if (connectPacket->error)
-			{
+			{ // DNS解析出错
 				[self notifyDidNotConnect:connectPacket->error];
 			}
 			else
-			{
+			{ // DNS解析成功
 				NSData *address = nil;
 				NSError *error = nil;
 				
@@ -3207,6 +3272,7 @@ enum GCDAsyncUdpSocketConfig
 				
 				BOOL result = NO;
 				
+                // 连接
 				switch (addressFamily)
 				{
 					case AF_INET  : result = [self connectWithAddress4:address error:&error]; break;
@@ -3239,6 +3305,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// 连接ip4地址 maybeConnect中调用
 - (BOOL)connectWithAddress4:(NSData *)address4 error:(NSError **)errPtr
 {
 	LogTrace();
@@ -3259,6 +3326,7 @@ enum GCDAsyncUdpSocketConfig
 	return YES;
 }
 
+/// 连接ip4地址
 - (BOOL)connectWithAddress6:(NSData *)address6 error:(NSError **)errPtr
 {
 	LogTrace();
@@ -3283,6 +3351,7 @@ enum GCDAsyncUdpSocketConfig
 #pragma mark Multicast
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// 必须bind以及not connected
 - (BOOL)preJoin:(NSError **)errPtr
 {
 	if (![self preOp:errPtr])
@@ -3312,6 +3381,8 @@ enum GCDAsyncUdpSocketConfig
 	
 	return YES;
 }
+
+/// 组播相关
 
 - (BOOL)joinMulticastGroup:(NSString *)group error:(NSError **)errPtr
 {
@@ -3451,7 +3522,7 @@ enum GCDAsyncUdpSocketConfig
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #pragma mark Reuse port
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+/// setsockopt(socket4FD, SOL_SOCKET, SO_REUSEPORT, (const void *)&value, sizeof(value));
 - (BOOL)enableReusePort:(BOOL)flag error:(NSError **)errPtr
 {
 	__block BOOL result = NO;
@@ -3516,6 +3587,8 @@ enum GCDAsyncUdpSocketConfig
 #pragma mark Broadcast
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// 开启广播 setsockopt(socket4FD, SOL_SOCKET, SO_BROADCAST, (const void *)&value, sizeof(value));
+/// 就是向局域网内所有人说话
 - (BOOL)enableBroadcast:(BOOL)flag error:(NSError **)errPtr
 {
 	__block BOOL result = NO;
@@ -3575,6 +3648,8 @@ enum GCDAsyncUdpSocketConfig
 	[self sendData:data withTimeout:-1.0 tag:tag];
 }
 
+/// 创建一个GCDAsyncUdpSendPacket 加入队列
+/// 需要是已经连接的socket
 - (void)sendData:(NSData *)data withTimeout:(NSTimeInterval)timeout tag:(long)tag
 {
 	LogTrace();
@@ -3595,6 +3670,7 @@ enum GCDAsyncUdpSocketConfig
 	
 }
 
+/// 无连接的发送
 - (void)sendData:(NSData *)data
           toHost:(NSString *)host
             port:(uint16_t)port
@@ -3639,6 +3715,7 @@ enum GCDAsyncUdpSocketConfig
 	
 }
 
+/// 向指定地址发送数据
 - (void)sendData:(NSData *)data toAddress:(NSData *)remoteAddr withTimeout:(NSTimeInterval)timeout tag:(long)tag
 {
 	LogTrace();
@@ -3659,6 +3736,8 @@ enum GCDAsyncUdpSocketConfig
 		[self maybeDequeueSend];
 	}});
 }
+
+/// 过滤器相关
 
 - (void)setSendFilter:(GCDAsyncUdpSocketSendFilterBlock)filterBlock withQueue:(dispatch_queue_t)filterQueue
 {
@@ -3700,61 +3779,64 @@ enum GCDAsyncUdpSocketConfig
 		dispatch_async(socketQueue, block);
 }
 
+/// 检查是否需要创建socket
+/// dequeue一个任务
+/// doPreSend开始发送
+/// 检查kCloseAfterSends
 - (void)maybeDequeueSend
 {
 	LogTrace();
 	NSAssert(dispatch_get_specific(IsOnSocketQueueOrTargetQueueKey), @"Must be dispatched on socketQueue");
 	
 	// If we don't have a send operation already in progress
-	if (currentSend == nil)
-	{
-		// Create the sockets if needed
-		if ((flags & kDidCreateSockets) == 0)
-		{
-			NSError *err = nil;
-			if (![self createSockets:&err])
-			{
-				[self closeWithError:err];
-				return;
-			}
-		}
-		
-		while ([sendQueue count] > 0)
-		{
-			// Dequeue the next object in the queue
-			currentSend = [sendQueue objectAtIndex:0];
-			[sendQueue removeObjectAtIndex:0];
-			
-			if ([currentSend isKindOfClass:[GCDAsyncUdpSpecialPacket class]])
-			{
-				[self maybeConnect];
-				
-				return; // The maybeConnect method, if it connects, will invoke this method again
-			}
-			else if (currentSend->resolveError)
-			{
-				// Notify delegate
-				[self notifyDidNotSendDataWithTag:currentSend->tag dueToError:currentSend->resolveError];
-				
-				// Clear currentSend
-				currentSend = nil;
-				
-				continue;
-			}
-			else
-			{
-				// Start preprocessing checks on the send packet
-				[self doPreSend];
-				
-				break;
-			}
-		}
-		
-		if ((currentSend == nil) && (flags & kCloseAfterSends))
-		{
-			[self closeWithError:nil];
-		}
-	}
+	if (currentSend != nil) { return; }
+    
+    // Create the sockets if needed
+    if ((flags & kDidCreateSockets) == 0)
+    {
+        NSError *err = nil;
+        if (![self createSockets:&err])
+        {
+            [self closeWithError:err];
+            return;
+        }
+    }
+    
+    while ([sendQueue count] > 0)
+    {
+        // Dequeue the next object in the queue
+        currentSend = [sendQueue objectAtIndex:0];
+        [sendQueue removeObjectAtIndex:0];
+        
+        if ([currentSend isKindOfClass:[GCDAsyncUdpSpecialPacket class]])
+        {
+            [self maybeConnect];
+            
+            return; // The maybeConnect method, if it connects, will invoke this method again
+        }
+        else if (currentSend->resolveError)
+        {
+            // Notify delegate
+            [self notifyDidNotSendDataWithTag:currentSend->tag dueToError:currentSend->resolveError];
+            
+            // Clear currentSend
+            currentSend = nil;
+            
+            continue;
+        }
+        else
+        {
+            // Start preprocessing checks on the send packet
+            [self doPreSend];
+            
+            break;
+        }
+    }
+    
+    if ((currentSend == nil) && (flags & kCloseAfterSends))
+    {
+        [self closeWithError:nil];
+    }
 }
 
 /**
@@ -3764,6 +3846,8 @@ enum GCDAsyncUdpSocketConfig
  * 
  * If the packet passes all checks, it will be passed on to the doSend method.
 **/
+/// 两种情况 1.有连接 2.无连接
+///
 - (void)doPreSend
 {
 	LogTrace();
@@ -3779,6 +3863,7 @@ enum GCDAsyncUdpSocketConfig
 	{
 		// Connected socket
 		
+        // 已连接的 不能再发给其他端口
 		if (currentSend->resolveInProgress || currentSend->resolvedAddresses || currentSend->resolveError)
 		{
 			NSString *msg = @"Cannot specify destination of packet for connected socket";
@@ -3807,6 +3892,7 @@ enum GCDAsyncUdpSocketConfig
 		{
 			if (currentSend->resolvedAddresses == nil)
 			{
+                // 无连接的 必须指定主机
 				NSString *msg = @"You must specify destination of packet for a non-connected socket";
 				error = [self badConfigError:msg];
 			}
@@ -3827,6 +3913,7 @@ enum GCDAsyncUdpSocketConfig
 	
 	if (waitingForResolve)
 	{
+        // 等待目标解析完成
 		// We're waiting for the packet's destination to be resolved.
 		
 		LogVerbose(@"currentSend - waiting for address resolve");
@@ -3853,6 +3940,8 @@ enum GCDAsyncUdpSocketConfig
 		return;
 	}
 	
+    /// 可以开始发送了 首先检查是否有过滤器
+    
 	// 
 	// 2. Query sendFilter (if applicable)
 	// 
@@ -3929,7 +4018,12 @@ enum GCDAsyncUdpSocketConfig
 /**
  * This method performs the actual sending of data in the currentSend packet.
  * It should only be called if the 
+ * sendto
 **/
+
+/// send4Source send6Source的回调会调用这个方法
+/// doPreSend会调用这个方法
+/// 在这里调用send(kDidConnect)或者sendTo发送数据
 - (void)doSend
 {
 	LogTrace();
@@ -4009,13 +4103,14 @@ enum GCDAsyncUdpSocketConfig
 			socketError = [self errnoErrorWithReason:@"Error in send() function."];
 	}
 	
+    
 	if (waitingForSocket)
 	{
 		// Not enough room in the underlying OS socket send buffer.
 		// Wait for a notification of available space.
 		
 		LogVerbose(@"currentSend - waiting for socket");
-		
+		// 没有足够的容量来发送数据
 		if (!(flags & kSock4CanAcceptBytes)) {
 			[self resumeSend4Source];
 		}
@@ -4045,6 +4140,7 @@ enum GCDAsyncUdpSocketConfig
 
 /**
  * Releases all resources associated with the currentSend.
+ * 结束超时定时器
 **/
 - (void)endCurrentSend
 {
@@ -4062,6 +4158,7 @@ enum GCDAsyncUdpSocketConfig
 
 /**
  * Performs the operations to timeout the current send operation, and move on.
+ * 发送超时 通知代理
 **/
 - (void)doSendTimeout
 {
@@ -4075,6 +4172,7 @@ enum GCDAsyncUdpSocketConfig
 /**
  * Sets up a timer that fires to timeout the current send operation.
  * This method should only be called once per send packet.
+ * 开启超时定时器
 **/
 - (void)setupSendTimerWithTimeout:(NSTimeInterval)timeout
 {
@@ -4100,6 +4198,8 @@ enum GCDAsyncUdpSocketConfig
 #pragma mark Receiving
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+/// kReceiveOnce
 - (BOOL)receiveOnce:(NSError **)errPtr
 {
 	LogTrace();
@@ -4146,6 +4246,7 @@ enum GCDAsyncUdpSocketConfig
 	return result;
 }
 
+/// 开始接收数据 设置标志位kReceiveContinuous
 - (BOOL)beginReceiving:(NSError **)errPtr
 {
 	LogTrace();
@@ -4192,6 +4293,7 @@ enum GCDAsyncUdpSocketConfig
 	return result;
 }
 
+/// 挂起receiveSource
 - (void)pauseReceiving
 {
 	LogTrace();
@@ -4214,6 +4316,8 @@ enum GCDAsyncUdpSocketConfig
 	else
 		dispatch_async(socketQueue, block);
 }
+
+/// 过滤器相关
 
 - (void)setReceiveFilter:(GCDAsyncUdpSocketReceiveFilterBlock)filterBlock withQueue:(dispatch_queue_t)filterQueue
 {
@@ -4255,10 +4359,12 @@ enum GCDAsyncUdpSocketConfig
 		dispatch_async(socketQueue, block);
 }
 
+/// 开始接收数据
 - (void)doReceive
 {
 	LogTrace();
 	
+    /// 暂停读取
 	if ((flags & (kReceiveOnce | kReceiveContinuous)) == 0)
 	{
 		LogVerbose(@"Receiving is paused...");
@@ -4273,6 +4379,7 @@ enum GCDAsyncUdpSocketConfig
 		return;
 	}
 	
+    /// 只接收一次的话 要看看接收到的数据是否被过滤掉
 	if ((flags & kReceiveOnce) && (pendingFilterOperations > 0))
 	{
 		LogVerbose(@"Receiving is temporarily paused (pending filter operations)...");
@@ -4287,6 +4394,7 @@ enum GCDAsyncUdpSocketConfig
 		return;
 	}
 	
+    // 无数据
 	if ((socket4FDBytesAvailable == 0) && (socket6FDBytesAvailable == 0))
 	{
 		LogVerbose(@"No data available to receive...");
@@ -4315,6 +4423,7 @@ enum GCDAsyncUdpSocketConfig
 	{
 		// Non-Connected socket
 		
+        // 服务端可能会同时存在两种socket 所以
 		if (socket4FDBytesAvailable > 0)
 		{
 			if (socket6FDBytesAvailable > 0)
@@ -4439,6 +4548,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 	else
 	{
+        // 接收到的数据不是连接的断开
 		if (flags & kDidConnect)
 		{
 			if (addr4 && ![self isConnectedToAddress4:addr4])
@@ -4451,6 +4561,9 @@ enum GCDAsyncUdpSocketConfig
 		
 		if (!ignored)
 		{
+            
+            /// 过滤操作 分同步和异步
+            
 			if (receiveFilterBlock && receiveFilterQueue)
 			{
 				// Run data through filter, and if approved, notify delegate
@@ -4568,6 +4681,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// 关闭连接 跟TCP不一样 TCP允许远端关闭writeStream
 - (void)doReceiveEOF
 {
 	LogTrace();
@@ -4608,6 +4722,7 @@ enum GCDAsyncUdpSocketConfig
 	}
 }
 
+/// 关闭socket 挂起的任务都会被取消掉
 - (void)close
 {
 	LogTrace();
@@ -4623,6 +4738,7 @@ enum GCDAsyncUdpSocketConfig
 		dispatch_sync(socketQueue, block);
 }
 
+/// 发送完后关闭
 - (void)closeAfterSending
 {
 	LogTrace();
@@ -4643,11 +4759,14 @@ enum GCDAsyncUdpSocketConfig
 		dispatch_async(socketQueue, block);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #pragma mark CFStream
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if TARGET_OS_IPHONE
+
+/// 以下方法都没用了
 
 static NSThread *listenerThread;
 
@@ -4832,6 +4951,7 @@ static void CFWriteStreamCallback(CFWriteStreamRef stream, CFStreamEventType typ
 	}
 }
 
+/// 这个方法没有用
 - (BOOL)createReadAndWriteStreams:(NSError **)errPtr
 {
 	LogTrace();
@@ -4917,6 +5037,7 @@ Failed:
 	return NO;
 }
 
+/// 这个方法没有用
 - (BOOL)registerForStreamCallbacks:(NSError **)errPtr
 {
 	LogTrace();
@@ -4994,6 +5115,7 @@ Failed:
 	return NO;
 }
 
+/// 这个方法没有用
 - (BOOL)addStreamsToRunLoop:(NSError **)errPtr
 {
 	LogTrace();
@@ -5015,6 +5137,7 @@ Failed:
 	return YES;
 }
 
+/// 这个方法没有用
 - (BOOL)openStreams:(NSError **)errPtr
 {
 	LogTrace();
@@ -5055,6 +5178,7 @@ Failed:
 	return NO;
 }
 
+/// 这个方法没有用
 - (void)removeStreamsFromRunLoop
 {
 	LogTrace();
@@ -5071,6 +5195,7 @@ Failed:
 	}
 }
 
+/// 这个方法没有用
 - (void)closeReadAndWriteStreams
 {
 	LogTrace();
@@ -5107,6 +5232,7 @@ Failed:
 
 #endif
 
+/// 初始化的时间监听applicationWillEnterForeground
 - (void)applicationWillEnterForeground:(NSNotification *)notification
 {
 	LogTrace();
@@ -5242,6 +5368,7 @@ Failed:
 		return writeStream6;
 }
 
+/// UDP连接技术设置了也没用
 - (BOOL)enableBackgroundingOnSockets
 {
 	if (! dispatch_get_specific(IsOnSocketQueueOrTargetQueueKey))
@@ -5357,6 +5484,7 @@ Failed:
 	return port;
 }
 
+
 + (int)familyFromAddress:(NSData *)address
 {
 	int af = AF_UNSPEC;
@@ -5386,6 +5514,7 @@ Failed:
 	return [self getHost:hostPtr port:portPtr family:NULL fromAddress:address];
 }
 
+/// 获取host port family
 + (BOOL)getHost:(NSString **)hostPtr port:(uint16_t *)portPtr family:(int *)afPtr fromAddress:(NSData *)address
 {
 	if ([address length] >= sizeof(struct sockaddr))

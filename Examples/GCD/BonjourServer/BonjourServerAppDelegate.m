@@ -3,6 +3,19 @@
 #import "DDLog.h"
 #import "DDTTYLogger.h"
 #import "DDASLLogger.h"
+#import <arpa/inet.h>
+#import <fcntl.h>
+#import <ifaddrs.h>
+#import <netdb.h>
+#import <netinet/in.h>
+#import <net/if.h>
+#import <sys/socket.h>
+#import <sys/types.h>
+#import <sys/ioctl.h>
+#import <sys/poll.h>
+#import <sys/uio.h>
+#import <sys/un.h>
+#import <unistd.h>
 
 // Log levels: off, error, warn, info, verbose
 static const int ddLogLevel = LOG_LEVEL_VERBOSE;
@@ -73,6 +86,7 @@ static const int ddLogLevel = LOG_LEVEL_VERBOSE;
 	// The newSocket automatically inherits its delegate & delegateQueue from its parent.
 	
 	[connectedSockets addObject:newSocket];
+    [self outputHosts];
 }
 
 - (void)socketDidDisconnect:(GCDAsyncSocket *)sock withError:(NSError *)err
@@ -82,8 +96,41 @@ static const int ddLogLevel = LOG_LEVEL_VERBOSE;
 
 - (void)netServiceDidPublish:(NSNetService *)ns
 {
-	DDLogInfo(@"Bonjour Service Published: domain(%@) type(%@) name(%@) port(%i)",
+	NSLog(@"Bonjour Service Published: domain(%@) type(%@) name(%@) port(%i)",
 			  [ns domain], [ns type], [ns name], (int)[ns port]);
+}
+
+- (void)outputHosts {
+    NSArray<NSData *> *addresses = [netService addresses];
+    for (NSData *addr in addresses) {
+        NSString *s = nil;
+        const struct sockaddr *sa = (typeof(sa))[addr bytes];
+        if (sa->sa_family == AF_INET) {
+            struct sockaddr_in sockaddr4;
+            memcpy(&sockaddr4, sa, sizeof(sockaddr4));
+            char addrBuf[16];
+            
+            if (inet_ntop(AF_INET, &sockaddr4.sin_addr, addrBuf, (socklen_t)sizeof(addrBuf)) == NULL)
+            {
+                addrBuf[0] = '\0';
+            }
+            s = [NSString stringWithCString:addrBuf encoding:NSASCIIStringEncoding];
+            NSLog(@"ipv4 host %@",s);
+        } else {
+            struct sockaddr_in6 sockaddr6;
+            memcpy(&sockaddr6, sa, sizeof(sockaddr6));
+            char addrBuf[16];
+            
+            if (inet_ntop(AF_INET, &sockaddr6.sin6_addr, addrBuf, (socklen_t)sizeof(addrBuf)) == NULL)
+            {
+                addrBuf[0] = '\0';
+            }
+            s = [NSString stringWithCString:addrBuf encoding:NSASCIIStringEncoding];
+            NSLog(@"ipv6 host %@",s);
+        }
+        
+    }
+
 }
 
 - (void)netService:(NSNetService *)ns didNotPublish:(NSDictionary *)errorDict

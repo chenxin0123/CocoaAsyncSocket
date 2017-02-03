@@ -3,6 +3,19 @@
 #import "DDLog.h"
 #import "DDTTYLogger.h"
 #import "DDASLLogger.h"
+#import <arpa/inet.h>
+#import <fcntl.h>
+#import <ifaddrs.h>
+#import <netdb.h>
+#import <netinet/in.h>
+#import <net/if.h>
+#import <sys/socket.h>
+#import <sys/types.h>
+#import <sys/ioctl.h>
+#import <sys/poll.h>
+#import <sys/uio.h>
+#import <sys/un.h>
+#import <unistd.h>
 
 // Log levels: off, error, warn, info, verbose
 static const int ddLogLevel = LOG_LEVEL_VERBOSE;
@@ -13,6 +26,12 @@ static const int ddLogLevel = LOG_LEVEL_VERBOSE;
 
 #pragma mark -
 
+@interface BonjourClientAppDelegate ()
+
+@property (nonatomic, strong) NSMutableArray *array;///<
+
+@end
+
 @implementation BonjourClientAppDelegate
 
 @synthesize window;
@@ -22,14 +41,16 @@ static const int ddLogLevel = LOG_LEVEL_VERBOSE;
 	// Configure logging framework
 	
 	[DDLog addLogger:[DDTTYLogger sharedInstance]];
-	[DDLog addLogger:[DDASLLogger sharedInstance]];
 	
 	// Start browsing for bonjour services
 	
 	netServiceBrowser = [[NSNetServiceBrowser alloc] init];
 	
 	[netServiceBrowser setDelegate:self];
+//    [netServiceBrowser searchForRegistrationDomains];
 	[netServiceBrowser searchForServicesOfType:@"_YourServiceName._tcp." inDomain:@"local."];
+    
+    _array = [NSMutableArray array];
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)sender didNotSearch:(NSDictionary *)errorInfo
@@ -49,10 +70,9 @@ static const int ddLogLevel = LOG_LEVEL_VERBOSE;
 	{
 		DDLogVerbose(@"Resolving...");
 		
-		serverService = netService;
-		
-		[serverService setDelegate:self];
-		[serverService resolveWithTimeout:5.0];
+        [_array addObject:netService];
+		[netService setDelegate:self];
+		[netService resolveWithTimeout:5.0];
 	}
 }
 
@@ -88,6 +108,39 @@ static const int ddLogLevel = LOG_LEVEL_VERBOSE;
 		
 		[self connectToNextAddress];
 	}
+    [self outputHosts:sender];
+}
+- (void)outputHosts:(NSNetService *)netService {
+    NSArray<NSData *> *addresses = [netService addresses];
+    for (NSData *addr in addresses) {
+        NSString *s = nil;
+        const struct sockaddr *sa = (typeof(sa))[addr bytes];
+        if (sa->sa_family == AF_INET) {
+            struct sockaddr_in sockaddr4;
+            memcpy(&sockaddr4, sa, sizeof(sockaddr4));
+            char addrBuf[16];
+            
+            if (inet_ntop(AF_INET, &sockaddr4.sin_addr, addrBuf, (socklen_t)sizeof(addrBuf)) == NULL)
+            {
+                addrBuf[0] = '\0';
+            }
+            s = [NSString stringWithCString:addrBuf encoding:NSASCIIStringEncoding];
+            NSLog(@"ipv4 host %@",s);
+        } else {
+            struct sockaddr_in6 sockaddr6;
+            memcpy(&sockaddr6, sa, sizeof(sockaddr6));
+            char addrBuf[16];
+            
+            if (inet_ntop(AF_INET, &sockaddr6.sin6_addr, addrBuf, (socklen_t)sizeof(addrBuf)) == NULL)
+            {
+                addrBuf[0] = '\0';
+            }
+            s = [NSString stringWithCString:addrBuf encoding:NSASCIIStringEncoding];
+            NSLog(@"ipv6 host %@",s);
+        }
+        
+    }
+    
 }
 
 - (void)connectToNextAddress

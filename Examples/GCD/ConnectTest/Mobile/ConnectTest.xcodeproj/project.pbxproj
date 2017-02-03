@@ -10,7 +10,7 @@
 		11C32825186CDBD800F6D762 /* DDContextFilterLogFormatter.m in Sources */ = {isa = PBXBuildFile; fileRef = 11C32820186CDBD800F6D762 /* DDContextFilterLogFormatter.m */; };
 		11C32826186CDBD800F6D762 /* DDDispatchQueueLogFormatter.m in Sources */ = {isa = PBXBuildFile; fileRef = 11C32822186CDBD800F6D762 /* DDDispatchQueueLogFormatter.m */; };
 		11C32827186CDBD800F6D762 /* DDMultiFormatter.m in Sources */ = {isa = PBXBuildFile; fileRef = 11C32824186CDBD800F6D762 /* DDMultiFormatter.m */; };
-		DC4FC340142867780064A228 /* GCDAsyncSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = DC4FC33F142867780064A228 /* GCDAsyncSocket.m */; };
+		902449141E4471B20066F39F /* GCDAsyncSocket.m in Sources */ = {isa = PBXBuildFile; fileRef = 902449131E4471B20066F39F /* GCDAsyncSocket.m */; };
 		DC5889A5158DE310007AFCFC /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DC5889A4158DE310007AFCFC /* Security.framework */; };
 		DC90AB8C1477436C0022DF52 /* DDAbstractDatabaseLogger.m in Sources */ = {isa = PBXBuildFile; fileRef = DC90AB7D1477436C0022DF52 /* DDAbstractDatabaseLogger.m */; };
 		DC90AB8D1477436C0022DF52 /* DDASLLogger.m in Sources */ = {isa = PBXBuildFile; fileRef = DC90AB7F1477436C0022DF52 /* DDASLLogger.m */; };
@@ -39,8 +39,8 @@
 		11C32822186CDBD800F6D762 /* DDDispatchQueueLogFormatter.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DDDispatchQueueLogFormatter.m; sourceTree = "<group>"; };
 		11C32823186CDBD800F6D762 /* DDMultiFormatter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DDMultiFormatter.h; sourceTree = "<group>"; };
 		11C32824186CDBD800F6D762 /* DDMultiFormatter.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DDMultiFormatter.m; sourceTree = "<group>"; };
-		DC4FC33E142867780064A228 /* GCDAsyncSocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GCDAsyncSocket.h; path = ../../../GCDAsyncSocket.h; sourceTree = "<group>"; };
-		DC4FC33F142867780064A228 /* GCDAsyncSocket.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GCDAsyncSocket.m; path = ../../../GCDAsyncSocket.m; sourceTree = "<group>"; };
+		902449121E4471B20066F39F /* GCDAsyncSocket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = GCDAsyncSocket.h; path = ../../../../Source/GCD/GCDAsyncSocket.h; sourceTree = "<group>"; };
+		902449131E4471B20066F39F /* GCDAsyncSocket.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = GCDAsyncSocket.m; path = ../../../../Source/GCD/GCDAsyncSocket.m; sourceTree = "<group>"; };
 		DC5889A4158DE310007AFCFC /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		DC90AB7C1477436C0022DF52 /* DDAbstractDatabaseLogger.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = DDAbstractDatabaseLogger.h; path = ../../../../Vendor/CocoaLumberjack/DDAbstractDatabaseLogger.h; sourceTree = "<group>"; };
 		DC90AB7D1477436C0022DF52 /* DDAbstractDatabaseLogger.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = DDAbstractDatabaseLogger.m; path = ../../../../Vendor/CocoaLumberjack/DDAbstractDatabaseLogger.m; sourceTree = "<group>"; };
@@ -181,8 +181,8 @@
 		DCDE289413DDECC4006BFCC0 /* TCP */ = {
 			isa = PBXGroup;
 			children = (
-				DC4FC33E142867780064A228 /* GCDAsyncSocket.h */,
-				DC4FC33F142867780064A228 /* GCDAsyncSocket.m */,
+				902449121E4471B20066F39F /* GCDAsyncSocket.h */,
+				902449131E4471B20066F39F /* GCDAsyncSocket.m */,
 			);
 			name = TCP;
 			sourceTree = "<group>";
@@ -214,6 +214,11 @@
 			isa = PBXProject;
 			attributes = {
 				LastUpgradeCheck = 0500;
+				TargetAttributes = {
+					DCDE285713DDEC74006BFCC0 = {
+						DevelopmentTeam = 44HU6MVQN2;
+					};
+				};
 			};
 			buildConfigurationList = DCDE285213DDEC74006BFCC0 /* Build configuration list for PBXProject "ConnectTest" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -252,12 +257,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				902449141E4471B20066F39F /* GCDAsyncSocket.m in Sources */,
 				11C32827186CDBD800F6D762 /* DDMultiFormatter.m in Sources */,
 				DCDE286A13DDEC74006BFCC0 /* main.m in Sources */,
 				DCDE286D13DDEC74006BFCC0 /* ConnectTestAppDelegate.m in Sources */,
 				11C32826186CDBD800F6D762 /* DDDispatchQueueLogFormatter.m in Sources */,
 				DCDE287313DDEC74006BFCC0 /* ConnectTestViewController.m in Sources */,
-				DC4FC340142867780064A228 /* GCDAsyncSocket.m in Sources */,
 				DC90AB8C1477436C0022DF52 /* DDAbstractDatabaseLogger.m in Sources */,
 				11C32825186CDBD800F6D762 /* DDContextFilterLogFormatter.m in Sources */,
 				DC90AB8D1477436C0022DF52 /* DDASLLogger.m in Sources */,
@@ -337,11 +342,13 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				COPY_PHASE_STRIP = NO;
+				DEVELOPMENT_TEAM = 44HU6MVQN2;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "ConnectTest/ConnectTest-Prefix.pch";
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				INFOPLIST_FILE = "ConnectTest/ConnectTest-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				WRAPPER_EXTENSION = app;
 			};
@@ -352,10 +359,12 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				COPY_PHASE_STRIP = YES;
+				DEVELOPMENT_TEAM = 44HU6MVQN2;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "ConnectTest/ConnectTest-Prefix.pch";
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				INFOPLIST_FILE = "ConnectTest/ConnectTest-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				VALIDATE_PRODUCT = YES;
 				WRAPPER_EXTENSION = app;

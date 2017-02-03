@@ -821,6 +821,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * and make use of the socketDidCloseReadStream delegate method.
  * 
  * The default value is YES.
+ * 默认YES 做服务端开发才会用到这个属性。。
 **/
 @property (atomic, assign, readwrite) BOOL autoDisconnectOnClosedReadStream;
 
@@ -895,6 +896,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * 
  * Note: This workaround is ONLY needed if you intend to execute code directly on the ipQueue or moduleQueue.
  * This is often NOT the case, as such queues are used solely for execution shaping.
+ * 如果socketQueue设置了targetQueue 那么任务将在targetQueue中执行 那么targetQueue中是没有IsOnSocketQueueOrTargetQueueKey标记的
 **/
 - (void)markSocketQueueTargetQueue:(dispatch_queue_t)socketQueuesPreConfiguredTargetQueue;
 - (void)unmarkSocketQueueTargetQueue:(dispatch_queue_t)socketQueuesPreviouslyConfiguredTargetQueue;
@@ -1065,6 +1067,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * For example, your implementation might look something like this:
  * dispatch_retain(myExistingQueue);
  * return myExistingQueue;
+ * 新的socket的执行队列 返回NULL则会新建一个默认的队列
 **/
 - (nullable dispatch_queue_t)newSocketQueueForConnectionFromAddress:(NSData *)address onSocket:(GCDAsyncSocket *)sock;
 
@@ -1077,24 +1080,28 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * 
  * By default the new socket will have the same delegate and delegateQueue.
  * You may, of course, change this at any time.
+ * 监听到一个连接
 **/
 - (void)socket:(GCDAsyncSocket *)sock didAcceptNewSocket:(GCDAsyncSocket *)newSocket;
 
 /**
  * Called when a socket connects and is ready for reading and writing.
  * The host parameter will be an IP address, not a DNS name.
+ * 连接到主机
 **/
 - (void)socket:(GCDAsyncSocket *)sock didConnectToHost:(NSString *)host port:(uint16_t)port;
 
 /**
  * Called when a socket connects and is ready for reading and writing.
  * The host parameter will be an IP address, not a DNS name.
+ * 连接到url 跟didConnectToHost 两者只有一个会被调用
  **/
 - (void)socket:(GCDAsyncSocket *)sock didConnectToUrl:(NSURL *)url;
 
 /**
  * Called when a socket has completed reading the requested data into memory.
  * Not called if there is an error.
+ * 读取数据的回调
 **/
 - (void)socket:(GCDAsyncSocket *)sock didReadData:(NSData *)data withTag:(long)tag;
 
@@ -1102,17 +1109,20 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * Called when a socket has read in data, but has not yet completed the read.
  * This would occur if using readToData: or readToLength: methods.
  * It may be used to for things such as updating progress bars.
+ * 读取部分数据
 **/
 - (void)socket:(GCDAsyncSocket *)sock didReadPartialDataOfLength:(NSUInteger)partialLength tag:(long)tag;
 
 /**
  * Called when a socket has completed writing the requested data. Not called if there is an error.
+ * 写数据后的回调
 **/
 - (void)socket:(GCDAsyncSocket *)sock didWriteDataWithTag:(long)tag;
 
 /**
  * Called when a socket has written some data, but has not yet completed the entire write.
  * It may be used to for things such as updating progress bars.
+ * 写了部分数据
 **/
 - (void)socket:(GCDAsyncSocket *)sock didWritePartialDataOfLength:(NSUInteger)partialLength tag:(long)tag;
 
@@ -1126,6 +1136,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * The length parameter is the number of bytes that have been read so far for the read operation.
  * 
  * Note that this method may be called multiple times for a single read if you return positive numbers.
+ * 超时后给开发者一个机会来觉得是否延迟超时
 **/
 - (NSTimeInterval)socket:(GCDAsyncSocket *)sock shouldTimeoutReadWithTag:(long)tag
                                                                  elapsed:(NSTimeInterval)elapsed
@@ -1141,6 +1152,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * The length parameter is the number of bytes that have been written so far for the write operation.
  * 
  * Note that this method may be called multiple times for a single write if you return positive numbers.
+ * 同上
 **/
 - (NSTimeInterval)socket:(GCDAsyncSocket *)sock shouldTimeoutWriteWithTag:(long)tag
                                                                   elapsed:(NSTimeInterval)elapsed
@@ -1151,6 +1163,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * 
  * This delegate method is only called if autoDisconnectOnClosedReadStream has been set to NO.
  * See the discussion on the autoDisconnectOnClosedReadStream method for more information.
+ * autoDisconnectOnClosedReadStream为NO的时候才会被调用
 **/
 - (void)socketDidCloseReadStream:(GCDAsyncSocket *)sock;
 
@@ -1174,6 +1187,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * asyncSocket = nil; // I'm implicitly disconnecting the socket
  * 
  * Of course, this depends on how your state machine is configured.
+ * sock 可能为nil
 **/
 - (void)socketDidDisconnect:(GCDAsyncSocket *)sock withError:(nullable NSError *)err;
 
@@ -1183,6 +1197,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * 
  * If a SSL/TLS negotiation fails (invalid certificate, etc) then the socket will immediately close,
  * and the socketDidDisconnect:withError: delegate method will be called with the specific SSL error code.
+ * 成功完成TLS协商
 **/
 - (void)socketDidSecure:(GCDAsyncSocket *)sock;
 
@@ -1202,6 +1217,7 @@ typedef NS_ENUM(NSInteger, GCDAsyncSocketError) {
  * Thus this method uses a completionHandler block rather than a normal return value.
  * The completionHandler block is thread-safe, and may be invoked from a background queue/thread.
  * It is safe to invoke the completionHandler block even if the socket has been closed.
+ * GCDAsyncSocketManuallyEvaluateTrust == YES时才会调用
 **/
 - (void)socket:(GCDAsyncSocket *)sock didReceiveTrust:(SecTrustRef)trust
                                     completionHandler:(void (^)(BOOL shouldTrustPeer))completionHandler;
